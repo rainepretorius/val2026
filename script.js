@@ -1,4 +1,4 @@
-/* script.js — robust version (desktop + mobile same vibe, fair timer, hard reset) */
+/* script.js — robust version + mobile auto-move after load + NO requires 2 clicks */
 
 const yesBtn = document.querySelector(".yes-btn");
 const noBtn = document.querySelector(".no-btn");
@@ -26,12 +26,12 @@ if (!helper) {
 const HA_WEBHOOK_URL =
   "https://home-assistant.fsrl.pretoriusse.net/api/webhook/-bcdrRHw4gBccbK5xwgKpXKgR";
 
-/* Images (keep consistent absolute-ish paths; change to /... if served from root) */
+/* Images */
 const IMG_IDLE = "./wolf_golden_retriever_walking.gif";
 const IMG_YES  = "./yes_grey_wolf_golden_retriever_animated.gif";
 const IMG_NO   = "./no_good_boy_golden_retriever_animated.gif";
 
-/* Motion preferences */
+/* Motion prefs + device */
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 function isDesktopLike() {
   return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -58,6 +58,9 @@ let currentY = 0;
 let phoneMoveInterval = null;
 let firstInteractionHandler = null;
 
+// NEW: require two NO clicks to confirm
+let noClickCount = 0;
+
 /* ---------- Utilities ---------- */
 
 function safeDisplay(el, value) {
@@ -67,12 +70,10 @@ function safeDisplay(el, value) {
 
 function hardResetNoButtonPosition() {
   if (!noBtn) return;
-  // Kill any in-flight CSS transitions causing stuck transforms
   const prevTransition = noBtn.style.transition;
   noBtn.style.transition = "none";
   noBtn.style.transform = "translate(0px, 0px)";
-  // Force reflow to apply
-  void noBtn.offsetHeight;
+  void noBtn.offsetHeight; // reflow
   noBtn.style.transition = prevTransition || "";
 }
 
@@ -91,14 +92,17 @@ function clearFirstInteractionListeners() {
   firstInteractionHandler = null;
 }
 
+function startInteractionTimerIfNeeded() {
+  if (interactionStarted) return;
+  interactionStarted = true;
+  dodgeStartMs = Date.now();
+}
+
 function armFirstInteraction() {
   clearFirstInteractionListeners();
 
   firstInteractionHandler = () => {
-    if (!interactionStarted) {
-      interactionStarted = true;
-      dodgeStartMs = Date.now();
-    }
+    startInteractionTimerIfNeeded();
     clearFirstInteractionListeners();
   };
 
@@ -126,11 +130,11 @@ function maybeDisableDodge() {
 
   const elapsed = interactionStarted && dodgeStartMs ? (Date.now() - dodgeStartMs) : 0;
 
-  // Count-limit always applies; time-limit applies only after interaction starts
+  // Count-limit always applies; time-limit only after interaction begins
   if (dodgeCount >= DODGE_LIMIT || (interactionStarted && elapsed >= DODGE_TIME_LIMIT)) {
     dodgeEnabled = false;
     if (helper) helper.textContent = "Ok ok — jy kan ‘Nee’ kies 😌";
-    // Do NOT snap back; just stop moving now.
+    // Do not snap back; just stop moving from now on.
   }
 }
 
@@ -144,14 +148,13 @@ function getValidPosition() {
 
   const safeMaxY = Math.max(0, maxY);
 
-  // Generate positions different enough to feel "alive"
   let newX, newY;
   let attempts = 0;
   do {
     attempts += 1;
     newX = (Math.random() - 0.6) * maxX * 0.9;
     newY = (Math.random() - 0.6) * safeMaxY * 1.2;
-    if (attempts > 12) break; // prevent rare infinite looping
+    if (attempts > 12) break;
   } while (
     Math.abs(newX - currentX) < buttonRect.width * 0.8 &&
     Math.abs(newY - currentY) < buttonRect.height * 0.8
@@ -163,16 +166,14 @@ function getValidPosition() {
   return { x: newX - 10, y: newY - 50 };
 }
 
-function moveNoButtonOnce({ countsAsDodge }) {
+function moveNoButtonOnce({ countsAsDodge, forceStartTimer }) {
   if (prefersReduced) return;
   if (!dodgeEnabled) return;
 
+  if (forceStartTimer) startInteractionTimerIfNeeded();
+
   if (countsAsDodge) {
-    // Start timer only after first real interaction
-    if (!interactionStarted) {
-      interactionStarted = true;
-      dodgeStartMs = Date.now();
-    }
+    startInteractionTimerIfNeeded();
     dodgeCount += 1;
   }
 
@@ -185,43 +186,43 @@ function moveNoButtonOnce({ countsAsDodge }) {
   maybeDisableDodge();
 }
 
-/* Desktop: dodge on hover/focus (each move counts as a dodge) */
+/* Desktop dodge on hover/focus */
 function onDesktopDodgeTrigger() {
   if (!isDesktopLike()) return;
-  moveNoButtonOnce({ countsAsDodge: true });
+  moveNoButtonOnce({ countsAsDodge: true, forceStartTimer: true });
 }
 
-/* Mobile: start gentle movement after load (does NOT count until interaction started) */
+/* Mobile: start moving after FULL load (images/fonts) */
 function startPhoneTeaseMovement() {
   clearMovement();
   if (prefersReduced) return;
   if (!isMobileLike()) return;
 
+  // Do one visible move immediately (does NOT start timer and does NOT count)
+  moveNoButtonOnce({ countsAsDodge: false, forceStartTimer: false });
+
   phoneMoveInterval = setInterval(() => {
     if (!dodgeEnabled) return;
 
-    // On mobile: before interaction = movement but not counted, no timer.
-    // After interaction = movement counts, time applies.
+    // Before interaction: move but don't count and don't start timer.
+    // After interaction: count dodges and time applies.
     const counts = interactionStarted;
-    moveNoButtonOnce({ countsAsDodge: counts });
+    moveNoButtonOnce({ countsAsDodge: counts, forceStartTimer: false });
   }, 650);
 }
 
-/* Full reset — handles all edge cases */
+/* Full reset */
 function resetEverything({ oldYesDisplay, oldNoDisplay, oldNoteDisplay }) {
-  // stop loops/listeners first so they can't override reset
   clearMovement();
   clearFirstInteractionListeners();
 
-  // restore UI
   showChoices(oldYesDisplay, oldNoDisplay, oldNoteDisplay);
 
-  // text/image
   question.innerHTML = "Danelle, sal jy my Valentyn wees?";
   gif.src = IMG_IDLE;
+
   if (helper) helper.textContent = "";
 
-  // state
   dodgeCount = 0;
   dodgeEnabled = true;
   interactionStarted = false;
@@ -231,23 +232,28 @@ function resetEverything({ oldYesDisplay, oldNoDisplay, oldNoteDisplay }) {
   currentY = 0;
 
   decisionLocked = false;
+  noClickCount = 0;
 
-  // hard reset positions (transform gets sticky across hide/show)
   hardResetNoButtonPosition();
 
-  // re-arm
   armFirstInteraction();
-  startPhoneTeaseMovement();
+
+  // IMPORTANT: start mobile teasing after reset as well
+  // Delay a tick so layout settles (prevents “no movement” bug)
+  setTimeout(() => startPhoneTeaseMovement(), 120);
 }
 
-/* ---------- Event wiring ---------- */
+/* ---------- Boot ---------- */
 
-document.addEventListener("DOMContentLoaded", () => {
+// Use window.load so layout/images are settled -> phone auto move works reliably
+window.addEventListener("load", () => {
   hardResetNoButtonPosition();
   if (helper) helper.textContent = "";
 
   armFirstInteraction();
-  startPhoneTeaseMovement();
+
+  // Start phone tease after a short delay to avoid 0-size rects
+  setTimeout(() => startPhoneTeaseMovement(), 150);
 });
 
 /* Desktop dodge hooks */
@@ -259,17 +265,15 @@ yesBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
   decisionLocked = true;
 
-  // capture current display states (in case you change layout later)
   const oldYesDisplay = yesBtn.style.display || "";
   const oldNoDisplay = noBtn.style.display || "";
   const oldNoteDisplay = note ? (note.style.display || "") : "";
 
-  // immediate UI feedback
   question.innerHTML = "Yay. Dis ons. 🌸";
   gif.src = IMG_YES;
 
   hideChoices();
-  clearMovement(); // stop phone drift during result state
+  clearMovement();
 
   await sendWebhookNotification({
     title: "Valentyn 💚",
@@ -282,9 +286,28 @@ yesBtn.addEventListener("click", async () => {
   }, 8000);
 });
 
-/* NO click (always allowed; dodge can stop but button still works) */
-noBtn.addEventListener("click", async () => {
+/* NO click — requires 2 clicks to confirm */
+noBtn.addEventListener("click", async (e) => {
   if (decisionLocked) return;
+
+  noClickCount += 1;
+
+  // FIRST NO click: do NOT accept. Start moving + timer, make it clear.
+  if (noClickCount === 1) {
+    startInteractionTimerIfNeeded(); // timer starts on actual intent
+    if (helper) helper.textContent = "Is jy seker? Klik ‘Nee’ weer 😌";
+
+    // Make it run away once immediately, then ensure mobile movement is running
+    moveNoButtonOnce({ countsAsDodge: true, forceStartTimer: true });
+
+    // On mobile, ensure teasing loop is running (it might not have started due to layout)
+    if (isMobileLike() && !phoneMoveInterval) startPhoneTeaseMovement();
+
+    // Do not proceed to accept
+    return;
+  }
+
+  // SECOND NO click: accept as real NO
   decisionLocked = true;
 
   const oldYesDisplay = yesBtn.style.display || "";
