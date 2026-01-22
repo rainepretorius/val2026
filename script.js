@@ -1,17 +1,12 @@
-/* script.js — robust version + mobile auto-move after load + NO requires 2 clicks */
+/* script.js — auto-tease NO on load, then stop + allow NO (phone + desktop) */
 
 const yesBtn = document.querySelector(".yes-btn");
-const noBtn = document.querySelector(".no-btn");
+const noBtn  = document.querySelector(".no-btn");
 const question = document.querySelector(".question");
 const gif = document.querySelector(".gif");
 const btnGroup = document.querySelector(".btn-group");
 const note = document.querySelector(".note");
 
-if (!yesBtn || !noBtn || !question || !gif || !btnGroup) {
-  console.error("Missing required DOM elements. Check class names in HTML.");
-}
-
-/* Helper text area */
 let helper = document.querySelector(".helper-text");
 if (!helper) {
   helper = document.createElement("div");
@@ -26,116 +21,46 @@ if (!helper) {
 const HA_WEBHOOK_URL =
   "https://home-assistant.fsrl.pretoriusse.net/api/webhook/-bcdrRHw4gBccbK5xwgKpXKgR";
 
-/* Images */
 const IMG_IDLE = "./wolf_golden_retriever_walking.gif";
 const IMG_YES  = "./yes_grey_wolf_golden_retriever_animated.gif";
 const IMG_NO   = "./no_good_boy_golden_retriever_animated.gif";
 
-/* Motion prefs + device */
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-function isDesktopLike() {
-  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-}
-function isMobileLike() {
-  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-}
 
-/* Dodge limits (fairness) */
-const DODGE_LIMIT = 10;
-const DODGE_TIME_LIMIT = 10000; // 10s after first interaction
+/* Tease settings */
+const TEASE_MS = 10000;        // how long it teases before stopping
+const TEASE_TICK_MS = 520;     // how often it jumps
 
 /* State */
-let dodgeCount = 0;
-let dodgeEnabled = true;
-let interactionStarted = false;
-let dodgeStartMs = null;
-
 let decisionLocked = false;
+
+let teasing = false;
+let teaseEnded = false;
+let teaseEndAt = 0;
+let teaseInterval = null;
 
 let currentX = 0;
 let currentY = 0;
 
-let phoneMoveInterval = null;
-let firstInteractionHandler = null;
-
-// NEW: require two NO clicks to confirm
-let noClickCount = 0;
-
-/* ---------- Utilities ---------- */
+/* ---------- Helpers ---------- */
 
 function safeDisplay(el, value) {
   if (!el) return;
   el.style.display = value;
 }
 
-function hardResetNoButtonPosition() {
-  if (!noBtn) return;
+function hardResetNoPosition() {
   const prevTransition = noBtn.style.transition;
   noBtn.style.transition = "none";
   noBtn.style.transform = "translate(0px, 0px)";
-  void noBtn.offsetHeight; // reflow
+  void noBtn.offsetHeight;
   noBtn.style.transition = prevTransition || "";
 }
 
-function clearMovement() {
-  if (phoneMoveInterval) clearInterval(phoneMoveInterval);
-  phoneMoveInterval = null;
-}
-
-function clearFirstInteractionListeners() {
-  if (!firstInteractionHandler) return;
-  window.removeEventListener("pointerdown", firstInteractionHandler);
-  window.removeEventListener("touchstart", firstInteractionHandler);
-  window.removeEventListener("mousemove", firstInteractionHandler);
-  window.removeEventListener("scroll", firstInteractionHandler);
-  window.removeEventListener("keydown", firstInteractionHandler);
-  firstInteractionHandler = null;
-}
-
-function startInteractionTimerIfNeeded() {
-  if (interactionStarted) return;
-  interactionStarted = true;
-  dodgeStartMs = Date.now();
-}
-
-function armFirstInteraction() {
-  clearFirstInteractionListeners();
-
-  firstInteractionHandler = () => {
-    startInteractionTimerIfNeeded();
-    clearFirstInteractionListeners();
-  };
-
-  window.addEventListener("pointerdown", firstInteractionHandler, { passive: true });
-  window.addEventListener("touchstart", firstInteractionHandler, { passive: true });
-  window.addEventListener("mousemove", firstInteractionHandler, { passive: true });
-  window.addEventListener("scroll", firstInteractionHandler, { passive: true });
-  window.addEventListener("keydown", firstInteractionHandler, { passive: true });
-}
-
-function hideChoices() {
-  safeDisplay(yesBtn, "none");
-  safeDisplay(noBtn, "none");
-  if (note) safeDisplay(note, "none");
-}
-
-function showChoices(oldYes, oldNo, oldNote) {
-  safeDisplay(yesBtn, oldYes);
-  safeDisplay(noBtn, oldNo);
-  if (note) safeDisplay(note, oldNote);
-}
-
-function maybeDisableDodge() {
-  if (!dodgeEnabled) return;
-
-  const elapsed = interactionStarted && dodgeStartMs ? (Date.now() - dodgeStartMs) : 0;
-
-  // Count-limit always applies; time-limit only after interaction begins
-  if (dodgeCount >= DODGE_LIMIT || (interactionStarted && elapsed >= DODGE_TIME_LIMIT)) {
-    dodgeEnabled = false;
-    if (helper) helper.textContent = "Ok ok — jy kan ‘Nee’ kies 😌";
-    // Do not snap back; just stop moving from now on.
-  }
+function clearTease() {
+  if (teaseInterval) clearInterval(teaseInterval);
+  teaseInterval = null;
+  teasing = false;
 }
 
 function getValidPosition() {
@@ -145,13 +70,13 @@ function getValidPosition() {
   const maxX = Math.max(0, containerRect.width - buttonRect.width);
   let maxY = containerRect.height - buttonRect.height;
   if (maxY <= 0) maxY = maxX * 0.7;
-
   const safeMaxY = Math.max(0, maxY);
 
   let newX, newY;
   let attempts = 0;
+
   do {
-    attempts += 1;
+    attempts++;
     newX = (Math.random() - 0.6) * maxX * 0.9;
     newY = (Math.random() - 0.6) * safeMaxY * 1.2;
     if (attempts > 12) break;
@@ -166,114 +91,120 @@ function getValidPosition() {
   return { x: newX - 10, y: newY - 50 };
 }
 
-function moveNoButtonOnce({ countsAsDodge, forceStartTimer }) {
+function moveNo() {
   if (prefersReduced) return;
-  if (!dodgeEnabled) return;
+  if (!teasing) return;
 
-  if (forceStartTimer) startInteractionTimerIfNeeded();
+  const pos = getValidPosition();
+  noBtn.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+}
 
-  if (countsAsDodge) {
-    startInteractionTimerIfNeeded();
-    dodgeCount += 1;
+function endTease() {
+  teasing = false;
+  teaseEnded = true;
+  clearTease();
+
+  // Put it somewhere sensible (no teleporting off-screen)
+  hardResetNoPosition();
+
+  helper.textContent = "Ok ok — jy kan nou ‘Nee’ kies 😌";
+}
+
+function startTease() {
+  if (prefersReduced) {
+    teaseEnded = true;
+    helper.textContent = "Jy kan ‘Nee’ kies 😌";
+    return;
   }
 
-  maybeDisableDodge();
-  if (!dodgeEnabled) return;
+  teasing = true;
+  teaseEnded = false;
+  teaseEndAt = Date.now() + TEASE_MS;
 
-  const newPos = getValidPosition();
-  noBtn.style.transform = `translate(${newPos.x}px, ${newPos.y}px)`;
+  helper.textContent = "Hehe 😌";
 
-  maybeDisableDodge();
+  // One immediate move so it visibly starts
+  moveNo();
+
+  clearTease();
+  teasing = true;
+  teaseInterval = setInterval(() => {
+    if (!teasing) return;
+
+    if (Date.now() >= teaseEndAt) {
+      endTease();
+      return;
+    }
+    moveNo();
+  }, TEASE_TICK_MS);
 }
 
-/* Desktop dodge on hover/focus */
-function onDesktopDodgeTrigger() {
-  if (!isDesktopLike()) return;
-  moveNoButtonOnce({ countsAsDodge: true, forceStartTimer: true });
+function hideChoices() {
+  safeDisplay(yesBtn, "none");
+  safeDisplay(noBtn, "none");
+  if (note) safeDisplay(note, "none");
 }
 
-/* Mobile: start moving after FULL load (images/fonts) */
-function startPhoneTeaseMovement() {
-  clearMovement();
-  if (prefersReduced) return;
-  if (!isMobileLike()) return;
-
-  // Do one visible move immediately (does NOT start timer and does NOT count)
-  moveNoButtonOnce({ countsAsDodge: false, forceStartTimer: false });
-
-  phoneMoveInterval = setInterval(() => {
-    if (!dodgeEnabled) return;
-
-    // Before interaction: move but don't count and don't start timer.
-    // After interaction: count dodges and time applies.
-    const counts = interactionStarted;
-    moveNoButtonOnce({ countsAsDodge: counts, forceStartTimer: false });
-  }, 650);
-}
-
-/* Full reset */
-function resetEverything({ oldYesDisplay, oldNoDisplay, oldNoteDisplay }) {
-  clearMovement();
-  clearFirstInteractionListeners();
-
-  showChoices(oldYesDisplay, oldNoDisplay, oldNoteDisplay);
+function resetState(oldYes, oldNo, oldNote) {
+  clearTease();
 
   question.innerHTML = "Danelle, sal jy my Valentyn wees?";
   gif.src = IMG_IDLE;
+  helper.textContent = "";
 
-  if (helper) helper.textContent = "";
+  yesBtn.style.display = oldYes;
+  noBtn.style.display = oldNo;
+  if (note) note.style.display = oldNote;
 
-  dodgeCount = 0;
-  dodgeEnabled = true;
-  interactionStarted = false;
-  dodgeStartMs = null;
+  decisionLocked = false;
 
+  // reset movement flags
+  teasing = false;
+  teaseEnded = false;
   currentX = 0;
   currentY = 0;
 
-  decisionLocked = false;
-  noClickCount = 0;
+  hardResetNoPosition();
 
-  hardResetNoButtonPosition();
-
-  armFirstInteraction();
-
-  // IMPORTANT: start mobile teasing after reset as well
-  // Delay a tick so layout settles (prevents “no movement” bug)
-  setTimeout(() => startPhoneTeaseMovement(), 120);
+  // restart teasing after reset
+  setTimeout(() => startTease(), 200);
 }
 
 /* ---------- Boot ---------- */
 
-// Use window.load so layout/images are settled -> phone auto move works reliably
+// Use load (better on phones)
 window.addEventListener("load", () => {
-  hardResetNoButtonPosition();
-  if (helper) helper.textContent = "";
+  hardResetNoPosition();
+  helper.textContent = "";
 
-  armFirstInteraction();
+  // ensure container has space for movement
+  btnGroup.style.position = btnGroup.style.position || "relative";
+  btnGroup.style.minHeight = btnGroup.style.minHeight || "92px";
 
-  // Start phone tease after a short delay to avoid 0-size rects
-  setTimeout(() => startPhoneTeaseMovement(), 150);
+  setTimeout(() => startTease(), 250);
 });
 
-/* Desktop dodge hooks */
-noBtn.addEventListener("mouseover", onDesktopDodgeTrigger);
-noBtn.addEventListener("focus", onDesktopDodgeTrigger);
+/* Optional: while teasing, if she tries to interact with NO, it jumps again */
+noBtn.addEventListener("pointerdown", (e) => {
+  if (!teasing) return;
+  e.preventDefault(); // blocks accidental click during tease window
+  moveNo();
+});
 
 /* YES click */
 yesBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
   decisionLocked = true;
 
-  const oldYesDisplay = yesBtn.style.display || "";
-  const oldNoDisplay = noBtn.style.display || "";
-  const oldNoteDisplay = note ? (note.style.display || "") : "";
+  const oldYes = yesBtn.style.display || "";
+  const oldNo  = noBtn.style.display || "";
+  const oldNote = note ? (note.style.display || "") : "";
 
   question.innerHTML = "Yay. Dis ons. 🌸";
   gif.src = IMG_YES;
 
   hideChoices();
-  clearMovement();
+  clearTease();
 
   await sendWebhookNotification({
     title: "Valentyn 💚",
@@ -281,45 +212,28 @@ yesBtn.addEventListener("click", async () => {
     response: "yes"
   });
 
-  setTimeout(() => {
-    resetEverything({ oldYesDisplay, oldNoDisplay, oldNoteDisplay });
-  }, 8000);
+  setTimeout(() => resetState(oldYes, oldNo, oldNote), 8000);
 });
 
-/* NO click — requires 2 clicks to confirm */
-noBtn.addEventListener("click", async (e) => {
+/* NO click — only allowed after teasing ends */
+noBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
 
-  noClickCount += 1;
+  // If tease hasn't ended, ignore click (pointerdown already prevented, but double safety)
+  if (!teaseEnded) return;
 
-  // FIRST NO click: do NOT accept. Start moving + timer, make it clear.
-  if (noClickCount === 1) {
-    startInteractionTimerIfNeeded(); // timer starts on actual intent
-    if (helper) helper.textContent = "Is jy seker? Klik ‘Nee’ weer 😌";
-
-    // Make it run away once immediately, then ensure mobile movement is running
-    moveNoButtonOnce({ countsAsDodge: true, forceStartTimer: true });
-
-    // On mobile, ensure teasing loop is running (it might not have started due to layout)
-    if (isMobileLike() && !phoneMoveInterval) startPhoneTeaseMovement();
-
-    // Do not proceed to accept
-    return;
-  }
-
-  // SECOND NO click: accept as real NO
   decisionLocked = true;
 
-  const oldYesDisplay = yesBtn.style.display || "";
-  const oldNoDisplay = noBtn.style.display || "";
-  const oldNoteDisplay = note ? (note.style.display || "") : "";
+  const oldYes = yesBtn.style.display || "";
+  const oldNo  = noBtn.style.display || "";
+  const oldNote = note ? (note.style.display || "") : "";
 
   question.innerHTML = "Dankie dat jy eerlik is. 🤍";
   gif.src = IMG_NO;
-  if (helper) helper.textContent = "";
+  helper.textContent = "";
 
   hideChoices();
-  clearMovement();
+  clearTease();
 
   await sendWebhookNotification({
     title: "Valentyn 🤍",
@@ -327,9 +241,7 @@ noBtn.addEventListener("click", async (e) => {
     response: "no"
   });
 
-  setTimeout(() => {
-    resetEverything({ oldYesDisplay, oldNoDisplay, oldNoteDisplay });
-  }, 8000);
+  setTimeout(() => resetState(oldYes, oldNo, oldNote), 8000);
 });
 
 /* ---------- Webhook ---------- */
@@ -340,7 +252,6 @@ async function sendWebhookNotification(payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     if (!response.ok) throw new Error(`HTTP error! ${response.status}`);
     console.log("Sent to HA:", payload);
   } catch (error) {
