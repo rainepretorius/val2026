@@ -102,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
 /* === YES click === */
 yesBtn.addEventListener("click", async () => {
   question.innerHTML = "Yay. Dis ons. 🌸";
-  gif.src = "./minions.gif";
+  gif.src = "/yes_nose_touch.gif";
 
   const oldYesDisplay = yesBtn.style.display;
   const oldNoDisplay = noBtn.style.display;
@@ -140,6 +140,7 @@ noBtn.addEventListener("focus", moveButton);
 /* === NO click: allow real No === */
 noBtn.addEventListener("click", async () => {
   question.innerHTML = "Dankie dat jy eerlik is. 🤍";
+  gif.src = "/no_good_boy.gif";
   helper.textContent = "";
 
   await sendWebhookNotification({
