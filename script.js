@@ -226,6 +226,7 @@ yesBtn.addEventListener("click", async () => {
   setTimeout(() => {
     showChoices(oldYesDisplay, oldNoDisplay, oldNoteDisplay);
     resetState();
+    gif.src = "./wolf_golden_retriever_walking.gif";
   }, 8000);
 });
 
