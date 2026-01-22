@@ -3,6 +3,7 @@ const noBtn = document.querySelector(".no-btn");
 const question = document.querySelector(".question");
 const gif = document.querySelector(".gif");
 const btnGroup = document.querySelector(".btn-group");
+const note = document.querySelector(".note");
 
 // Add (optional) helper text area if you want; otherwise it will create one.
 let helper = document.querySelector(".helper-text");
@@ -106,9 +107,11 @@ yesBtn.addEventListener("click", async () => {
 
   const oldYesDisplay = yesBtn.style.display;
   const oldNoDisplay = noBtn.style.display;
+  const oldNoteDisplay = note.style.display;
 
   yesBtn.style.display = "none";
   noBtn.style.display = "none";
+  note.style.display = "none";
 
   // Send short notification payload
   await sendWebhookNotification({
@@ -120,6 +123,7 @@ yesBtn.addEventListener("click", async () => {
   setTimeout(() => {
     noBtn.style.display = oldNoDisplay;
     yesBtn.style.display = oldYesDisplay;
+    note.style.display = oldNoteDisplay;
 
     question.innerHTML = "Danelle, sal jy my Valentyn wees?";
     gif.src = "./wolf_golden_retriever_walking.gif";
@@ -148,11 +152,31 @@ noBtn.addEventListener("click", async () => {
     message: "Sy kies eerlikheid. Respek.",
     response: "no"
   });
+  
+  const oldYesDisplay = yesBtn.style.display;
+  const oldNoDisplay = noBtn.style.display;
+  const oldNoteDisplay = note.style.display;
 
-  // Keep it calm and quick
+  yesBtn.style.display = "none";
+  noBtn.style.display = "none";
+  note.style.display = "none";
+
+
   setTimeout(() => {
+    noBtn.style.display = oldNoDisplay;
+    yesBtn.style.display = oldYesDisplay;
+    note.style.display = oldNoteDisplay;
+
     question.innerHTML = "Danelle, sal jy my Valentyn wees?";
-  }, 2500);
+    gif.src = "./wolf_golden_retriever_walking.gif";
+
+    // Reset dodge state for replays
+    dodgeCount = 0;
+    dodgeEnabled = true;
+    dodgeStartMs = null;
+    helper.textContent = "";
+    noBtn.style.transform = "translate(0px, 0px)";
+  }, 8000);
 });
 
 /* === Optional: don’t trap her on page leave (I’d remove your beforeunload) === */
