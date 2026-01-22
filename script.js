@@ -228,7 +228,7 @@ noBtn.addEventListener("click", async () => {
   const oldNo  = noBtn.style.display || "";
   const oldNote = note ? (note.style.display || "") : "";
 
-  question.innerHTML = "Dankie dat jy eerlik is. 🤍";
+  question.innerHTML = "Hehehe I love you still. 🤍";
   gif.src = IMG_NO;
   helper.textContent = "";
 
