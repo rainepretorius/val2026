@@ -102,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
 /* === YES click === */
 yesBtn.addEventListener("click", async () => {
   question.innerHTML = "Yay. Dis ons. 🌸";
-  gif.src = "/minions.gif";
+  gif.src = "./minions.gif";
 
   const oldYesDisplay = yesBtn.style.display;
   const oldNoDisplay = noBtn.style.display;
