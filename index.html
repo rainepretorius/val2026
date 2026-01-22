@@ -1,40 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="af">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Megan</title>
-  <link rel="icon" type="image/x-icon" href="https://megan.pretoriusse.net/coffee.ico">
-  
-  <!-- Open Graph / Facebook -->
-  <meta property="og:url" content="https://megan.pretoriusse.net/">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Danelle ✨</title>
+  <meta name="description" content="Klik hier vir 'n klein surprise. Geen druk nie." />
+
+  <link rel="icon" type="image/x-icon" href="https://nellies.pretoriusse.net/coffee.ico">
+
+  <!-- Open Graph -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Megan">
-  <meta property="og:description" content="Klik hier vir 'n surprise">
-  <meta property="og:image" content="https://megan.pretoriusse.net/coffee.ico">
-  <meta property="og:image:width" content="600">
-  <meta property="og:image:height" content="315">
-  
+  <meta property="og:title" content="Danelle ✨">
+  <meta property="og:description" content="Klik hier vir 'n klein surprise. Geen druk nie.">
+  <meta property="og:image" content="https://nellies.pretoriusse.net/coffee.ico">
+
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://megan.pretoriusse.net/">
-  <meta name="twitter:title" content="Megan">
-  <meta name="twitter:description" content="Klik hier vir 'n surprise">
-  <meta name="twitter:image" content="https://megan.pretoriusse.net/coffee.ico">
-  
-  <link rel="stylesheet" href="style.css" />
-  <meta name="description" content="Klik hier vir 'n surprise">
+  <meta name="twitter:title" content="Danelle ✨">
+  <meta name="twitter:description" content="Klik hier vir 'n klein surprise. Geen druk nie.">
+  <meta name="twitter:image" content="https://nellies.pretoriusse.net/coffee.ico">
+  <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-<div class="wrapper">
-  <h2 class="question">Sal jy my valentyn wees?</h2>
-  <img class="gif" alt="gif" src="/cat.gif" />
-  <img class="gif" style="display: none;" alt="gif" src="/minions.gif" />
-  <div class="btn-group">
-    <button class="yes-btn">Ja</button>
-    <button class="no-btn">Nee</button>
-  </div>
-</div>
-<script src="script.js"></script>
+  <main class="wrapper" aria-live="polite">
+    <p class="kicker">klein surprise</p>
+
+    <h2 class="question">
+      Danelle, sal jy my Valentyn wees?
+    </h2>
+
+    <p class="subline">
+      Geen druk nie.<br>
+      Jy’s die wolf. Ek’s jou golden retriever.<br>
+      Ek kies jou — stadig en lojaal.
+    </p>
+
+    <!-- Hero image -->
+    <!-- Strong suggestion: wolf + dog walking together / silhouette / minimalist illustration -->
+    <img class="gif" alt="Wolf and golden retriever" src="/hero.gif" />
+
+    <div class="btn-group">
+      <button class="yes-btn" type="button">
+        Ja 🐺💚
+      </button>
+
+      <div class="no-wrap">
+        <button class="no-btn" type="button">
+          Nee
+        </button>
+        <div class="note">(Dis ook heeltemal okay.)</div>
+      </div>
+    </div>
+
+    <div class="helper-text" aria-live="polite"></div>
+  </main>
+
+  <script src="script.js"></script>
 </body>
 </html>
