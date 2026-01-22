@@ -122,7 +122,7 @@ yesBtn.addEventListener("click", async () => {
     yesBtn.style.display = oldYesDisplay;
 
     question.innerHTML = "Danelle, sal jy my Valentyn wees?";
-    gif.src = "/cat.gif";
+    gif.src = "./wolf_golden_retriever_walking.gif";
 
     // Reset dodge state for replays
     dodgeCount = 0;
