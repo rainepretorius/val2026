@@ -1,9 +1,9 @@
 /* script.js
-   - Teases NO for 10s after page load (phone + desktop)
-   - Then allows NO (one click accepted)
-   - YES shows Plan A/B/C buttons
-   - Clicking a plan opens a modal + sends detailed HA notification
-   - HA expects: { title, message, response }
+   - Teases NO for 10s after page load (phone + desktop), then allows NO
+   - YES: locks in YES, shows "Sy is joune. 💚", swaps gif, hides yes/no, shows plans
+   - Plans: click Plan A/B/C opens modal with details + "Kies hierdie plan" button
+   - Confirming a plan sends HA: { title, message, response } with full details
+   - HA expects ONLY: title, message, response
 */
 
 const yesBtn = document.querySelector(".yes-btn");
@@ -34,8 +34,8 @@ const IMG_NO   = "./no_good_boy_golden_retriever_animated.gif";
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* Tease settings */
-const TEASE_MS = 10000;     // tease duration
-const TEASE_TICK_MS = 520;  // how often it jumps
+const TEASE_MS = 10000;
+const TEASE_TICK_MS = 520;
 
 /* State */
 let decisionLocked = false;
@@ -49,6 +49,10 @@ let currentX = 0;
 let currentY = 0;
 
 const originalNoteHTML = note ? note.innerHTML : "";
+
+/* Plan selection state */
+let yesChosen = false;          // once YES clicked, NO should not be possible anymore
+let pendingPlanKey = null;      // which plan is currently shown in modal
 
 /* ---------- Helpers ---------- */
 
@@ -112,9 +116,7 @@ function endTease() {
   teaseEnded = true;
   clearTease();
 
-  // Reset to normal position to reduce frustration
   hardResetNoPosition();
-
   helper.textContent = "Ok ok — jy kan nou ‘Nee’ kies 😌";
 }
 
@@ -131,14 +133,12 @@ function startTease() {
 
   helper.textContent = "Hehe 😌";
 
-  // Immediate move so it feels alive
   moveNo();
 
   clearTease();
   teasing = true;
   teaseInterval = setInterval(() => {
     if (!teasing) return;
-
     if (Date.now() >= teaseEndAt) {
       endTease();
       return;
@@ -147,12 +147,40 @@ function startTease() {
   }, TEASE_TICK_MS);
 }
 
-/* Modal */
-function openModal(title, html) {
+/* ---------- Modal ---------- */
+
+function openModal(title, html, confirmText = "Kies hierdie plan") {
+  pendingPlanKey = null; // will be set by caller
   modalTitle.textContent = title;
-  modalBody.innerHTML = html;
+  modalBody.innerHTML = `
+    <div class="plan-detail">${html}</div>
+    <div style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
+      <button type="button" id="planConfirmBtn" class="modal-close">${confirmText} ✅</button>
+    </div>
+  `;
+
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+
+  // wire confirm button each time modal opens
+  const confirmBtn = document.getElementById("planConfirmBtn");
+  confirmBtn.addEventListener("click", async () => {
+    if (!pendingPlanKey) return;
+    const cfg = planContent[pendingPlanKey];
+    if (!cfg) return;
+
+    // send HA with full detail in message (server expects only title/message/response)
+    await sendWebhookNotification({
+      title: cfg.title,
+      message: cfg.notify,
+      response: cfg.response
+    });
+
+    closeModal();
+
+    // Optional: show a nice “locked in” line after confirming a plan
+    helper.textContent = "Cool. Ek reël dit 😌";
+  });
 }
 
 function closeModal() {
@@ -168,7 +196,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeModal();
 });
 
-/* Reset */
+/* ---------- UI Reset (optional) ---------- */
 function resetAll() {
   clearTease();
 
@@ -182,6 +210,8 @@ function resetAll() {
   safeDisplay(mainButtons, "");
 
   decisionLocked = false;
+  yesChosen = false;
+  pendingPlanKey = null;
 
   teasing = false;
   teaseEnded = false;
@@ -189,7 +219,6 @@ function resetAll() {
   currentY = 0;
 
   hardResetNoPosition();
-
   setTimeout(() => startTease(), 200);
 }
 
@@ -198,7 +227,6 @@ window.addEventListener("load", () => {
   hardResetNoPosition();
   helper.textContent = "";
 
-  // Ensure container has room to move the NO button
   btnGroup.style.position = btnGroup.style.position || "relative";
   btnGroup.style.minHeight = btnGroup.style.minHeight || "92px";
 
@@ -212,14 +240,15 @@ noBtn.addEventListener("pointerdown", (e) => {
   moveNo();
 });
 
-/* YES click — show plans (and notify you YES happened) */
+/* YES click — lock in YES and show plans (NO no longer relevant) */
 yesBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
   decisionLocked = true;
+  yesChosen = true;
 
-  question.innerHTML = "Yay. Dis ons. 🌸 Kies ‘n plan 😌";
+  question.innerHTML = "Sy is joune. 💚";
   gif.src = IMG_YES;
-  helper.textContent = "";
+  helper.textContent = "Kies net jou plan 😌";
 
   clearTease();
 
@@ -227,14 +256,18 @@ yesBtn.addEventListener("click", async () => {
   safeDisplay(mainButtons, "none");
   safeDisplay(plansWrap, "");
 
+  // Notify you YES happened (only once, and ONLY after she clicked YES)
   await sendWebhookNotification({
     title: "Valentyn 💚",
-    message: "JA 💚 (Kies nou 'n plan: A by my / B by jou / C gaan eet)",
+    message: "JA 💚 Sy is joune.",
     response: "yes"
   });
+
+  // unlock so plan modal confirm can send more notifications
+  decisionLocked = false;
 });
 
-/* Plan content + NOTIFICATION text (server expects title/message/response only) */
+/* Plan content + notification strings */
 const planContent = {
   A: {
     title: "Plan A 🖤",
@@ -272,25 +305,23 @@ const planContent = {
   }
 };
 
+/* Clicking plan buttons only opens modal (no HA call yet) */
 planButtons.forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    const plan = btn.dataset.plan;
-    const cfg = planContent[plan];
+  btn.addEventListener("click", () => {
+    if (!yesChosen) return; // plans only valid after YES
+    const planKey = btn.dataset.plan;
+    const cfg = planContent[planKey];
     if (!cfg) return;
 
-    openModal(cfg.title, cfg.html);
-
-    await sendWebhookNotification({
-      title: cfg.title,
-      message: cfg.notify,
-      response: cfg.response
-    });
+    pendingPlanKey = planKey;
+    openModal(cfg.title, cfg.html, "Kies hierdie plan");
   });
 });
 
-/* NO click — only allowed after tease ends */
+/* NO click — only allowed after teasing ends AND before YES is chosen */
 noBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
+  if (yesChosen) return;     // once YES clicked, ignore NO entirely
   if (!teaseEnded) return;
 
   decisionLocked = true;
@@ -308,6 +339,7 @@ noBtn.addEventListener("click", async () => {
     response: "no"
   });
 
+  // If you want it to reset after a while:
   setTimeout(() => resetAll(), 8000);
 });
 
