@@ -1,4 +1,10 @@
-/* script.js — auto-tease NO on load, then stop + allow NO (phone + desktop) */
+/* script.js
+   - Teases NO for 10s after page load (phone + desktop)
+   - Then allows NO (one click accepted)
+   - YES shows Plan A/B/C buttons
+   - Clicking a plan opens a modal + sends detailed HA notification
+   - HA expects: { title, message, response }
+*/
 
 const yesBtn = document.querySelector(".yes-btn");
 const noBtn  = document.querySelector(".no-btn");
@@ -6,17 +12,17 @@ const question = document.querySelector(".question");
 const gif = document.querySelector(".gif");
 const btnGroup = document.querySelector(".btn-group");
 const note = document.querySelector(".note");
+const helper = document.querySelector(".helper-text");
 
-let helper = document.querySelector(".helper-text");
-if (!helper) {
-  helper = document.createElement("div");
-  helper.className = "helper-text";
-  helper.style.marginTop = "10px";
-  helper.style.fontSize = "12px";
-  helper.style.color = "#6b7280";
-  helper.style.minHeight = "16px";
-  document.querySelector(".wrapper")?.appendChild(helper);
-}
+const mainButtons = document.getElementById("mainButtons");
+const plansWrap = document.getElementById("plans");
+const planButtons = document.querySelectorAll(".plan-btn");
+
+// Modal
+const modal = document.getElementById("modal");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const modalClose = document.getElementById("modalClose");
 
 const HA_WEBHOOK_URL =
   "https://home-assistant.fsrl.pretoriusse.net/api/webhook/-bcdrRHw4gBccbK5xwgKpXKgR";
@@ -28,8 +34,8 @@ const IMG_NO   = "./no_good_boy_golden_retriever_animated.gif";
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* Tease settings */
-const TEASE_MS = 10000;        // how long it teases before stopping
-const TEASE_TICK_MS = 520;     // how often it jumps
+const TEASE_MS = 10000;     // tease duration
+const TEASE_TICK_MS = 520;  // how often it jumps
 
 /* State */
 let decisionLocked = false;
@@ -41,6 +47,8 @@ let teaseInterval = null;
 
 let currentX = 0;
 let currentY = 0;
+
+const originalNoteHTML = note ? note.innerHTML : "";
 
 /* ---------- Helpers ---------- */
 
@@ -104,7 +112,7 @@ function endTease() {
   teaseEnded = true;
   clearTease();
 
-  // Put it somewhere sensible (no teleporting off-screen)
+  // Reset to normal position to reduce frustration
   hardResetNoPosition();
 
   helper.textContent = "Ok ok — jy kan nou ‘Nee’ kies 😌";
@@ -123,7 +131,7 @@ function startTease() {
 
   helper.textContent = "Hehe 😌";
 
-  // One immediate move so it visibly starts
+  // Immediate move so it feels alive
   moveNo();
 
   clearTease();
@@ -139,26 +147,42 @@ function startTease() {
   }, TEASE_TICK_MS);
 }
 
-function hideChoices() {
-  safeDisplay(yesBtn, "none");
-  safeDisplay(noBtn, "none");
-  if (note) safeDisplay(note, "none");
+/* Modal */
+function openModal(title, html) {
+  modalTitle.textContent = title;
+  modalBody.innerHTML = html;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
 }
 
-function resetState(oldYes, oldNo, oldNote) {
+function closeModal() {
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+modalClose.addEventListener("click", closeModal);
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+/* Reset */
+function resetAll() {
   clearTease();
 
   question.innerHTML = "Danelle, sal jy my Valentyn wees?";
   gif.src = IMG_IDLE;
   helper.textContent = "";
 
-  yesBtn.style.display = oldYes;
-  noBtn.style.display = oldNo;
-  if (note) note.style.display = oldNote;
+  if (note) note.innerHTML = originalNoteHTML;
+
+  safeDisplay(plansWrap, "none");
+  safeDisplay(mainButtons, "");
 
   decisionLocked = false;
 
-  // reset movement flags
   teasing = false;
   teaseEnded = false;
   currentX = 0;
@@ -166,82 +190,125 @@ function resetState(oldYes, oldNo, oldNote) {
 
   hardResetNoPosition();
 
-  // restart teasing after reset
   setTimeout(() => startTease(), 200);
 }
 
 /* ---------- Boot ---------- */
-
-// Use load (better on phones)
 window.addEventListener("load", () => {
   hardResetNoPosition();
   helper.textContent = "";
 
-  // ensure container has space for movement
+  // Ensure container has room to move the NO button
   btnGroup.style.position = btnGroup.style.position || "relative";
   btnGroup.style.minHeight = btnGroup.style.minHeight || "92px";
 
   setTimeout(() => startTease(), 250);
 });
 
-/* Optional: while teasing, if she tries to interact with NO, it jumps again */
+/* During tease, block accidental NO clicks; jump instead */
 noBtn.addEventListener("pointerdown", (e) => {
   if (!teasing) return;
-  e.preventDefault(); // blocks accidental click during tease window
+  e.preventDefault();
   moveNo();
 });
 
-/* YES click */
+/* YES click — show plans (and notify you YES happened) */
 yesBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
   decisionLocked = true;
 
-  const oldYes = yesBtn.style.display || "";
-  const oldNo  = noBtn.style.display || "";
-  const oldNote = note ? (note.style.display || "") : "";
-
-  question.innerHTML = "Yay. Dis ons. 🌸";
+  question.innerHTML = "Yay. Dis ons. 🌸 Kies ‘n plan 😌";
   gif.src = IMG_YES;
+  helper.textContent = "";
 
-  hideChoices();
   clearTease();
+
+  // Hide yes/no, show plans
+  safeDisplay(mainButtons, "none");
+  safeDisplay(plansWrap, "");
 
   await sendWebhookNotification({
     title: "Valentyn 💚",
-    message: "Sy kies my. Stadig is fine 😌",
+    message: "JA 💚 (Kies nou 'n plan: A by my / B by jou / C gaan eet)",
     response: "yes"
   });
-
-  setTimeout(() => resetState(oldYes, oldNo, oldNote), 8000);
 });
 
-/* NO click — only allowed after teasing ends */
+/* Plan content + NOTIFICATION text (server expects title/message/response only) */
+const planContent = {
+  A: {
+    title: "Plan A 🖤",
+    html:
+      "Ek pick jou op na werk.<br>" +
+      "Jy kom oor.<br>" +
+      "Ons kyk ‘n movie en cuddle.<br>" +
+      "Ons gaan slaap en cuddle.<br>" +
+      "Dis al. Geen druk.<br>" +
+      "As jy snacks wil hê, doen ons dit ook 😌",
+    notify: "Plan A 🖤: My plek → movie + cuddle → sleepover + cuddle (snacks optional 😌)",
+    response: "planA"
+  },
+  B: {
+    title: "Plan B 🐺",
+    html:
+      "Ek pick jou op na werk.<br>" +
+      "Ons gaan na jou plek toe.<br>" +
+      "Ons kyk ‘n movie en cuddle.<br>" +
+      "Ons gaan slaap en cuddle.<br>" +
+      "Dis al. Net sag en veilig.<br>" +
+      "Snacks is altyd ‘n ja 😌",
+    notify: "Plan B 🐺: Jou plek → movie + cuddle → sleepover + cuddle (snacks optional 😌)",
+    response: "planB"
+  },
+  C: {
+    title: "Plan C 🍽️",
+    html:
+      "Ons gaan eet iets lekker.<br>" +
+      "Rustig. Easy.<br>" +
+      "Geen pressure, net quality time.<br>" +
+      "Jy kies die plek, of ek stel 2 opsies voor 😌",
+    notify: "Plan C 🍽️: Date night → gaan eet iets lekker 😌",
+    response: "planC"
+  }
+};
+
+planButtons.forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const plan = btn.dataset.plan;
+    const cfg = planContent[plan];
+    if (!cfg) return;
+
+    openModal(cfg.title, cfg.html);
+
+    await sendWebhookNotification({
+      title: cfg.title,
+      message: cfg.notify,
+      response: cfg.response
+    });
+  });
+});
+
+/* NO click — only allowed after tease ends */
 noBtn.addEventListener("click", async () => {
   if (decisionLocked) return;
-
-  // If tease hasn't ended, ignore click (pointerdown already prevented, but double safety)
   if (!teaseEnded) return;
 
   decisionLocked = true;
 
-  const oldYes = yesBtn.style.display || "";
-  const oldNo  = noBtn.style.display || "";
-  const oldNote = note ? (note.style.display || "") : "";
-
-  question.innerHTML = "Hehehe I love you still. 🤍";
+  question.innerHTML = "Ek’s nogsteeds joune, my love. 🤍";
   gif.src = IMG_NO;
   helper.textContent = "";
 
-  hideChoices();
+  safeDisplay(mainButtons, "none");
   clearTease();
 
   await sendWebhookNotification({
     title: "Valentyn 🤍",
-    message: "Sy kies eerlikheid. Respek.",
+    message: "NEE 🤍 Ek’s nogsteeds joune, my love.",
     response: "no"
   });
 
-  setTimeout(() => resetState(oldYes, oldNo, oldNote), 8000);
+  setTimeout(() => resetAll(), 8000);
 });
 
 /* ---------- Webhook ---------- */

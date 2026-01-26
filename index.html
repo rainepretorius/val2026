@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="af">
 <head>
@@ -20,14 +21,13 @@
   <meta name="twitter:title" content="Danelle ✨">
   <meta name="twitter:description" content="Klik hier vir 'n klein surprise. Geen druk nie.">
   <meta name="twitter:image" content="https://nellies.pretoriusse.net/coffee.ico">
+
   <link rel="stylesheet" href="./style.css" />
 </head>
 
 <body>
   <main class="wrapper" aria-live="polite">
-    <h2 class="question">
-      Danelle, sal jy my Valentyn wees?
-    </h2>
+    <h2 class="question">Danelle, sal jy my Valentyn wees?</h2>
 
     <p class="subline">
       Geen druk nie.<br>
@@ -35,29 +35,46 @@
       Ek kies jou — stadig en lojaal.
     </p>
 
-    <!-- Hero image -->
-    <!-- Strong suggestion: wolf + dog walking together / silhouette / minimalist illustration -->
     <img
       class="gif"
       src="./wolf_golden_retriever_walking.gif"
       alt="A wolf and a golden retriever walking together"
     />
 
-    <div class="btn-group">
-      <button class="yes-btn" type="button">
-        Ja 🐺💚
-      </button>
+    <!-- Main yes/no -->
+    <div class="btn-group" id="mainButtons">
+      <button class="yes-btn" type="button">Ja 🐺💚</button>
 
       <div class="no-wrap">
-        <button class="no-btn" type="button">
-          Nee
-        </button>
+        <button class="no-btn" type="button">Nee</button>
         <div class="note" id="note">(Dis ook heeltemal okay.)</div>
       </div>
     </div>
 
+    <!-- Plans (hidden until YES) -->
+    <div class="plans" id="plans" style="display:none;">
+      <p class="plans-title">Kies jou vibe 😌</p>
+      <div class="plans-row">
+        <button class="plan-btn" data-plan="A" type="button">Plan A 🖤</button>
+        <button class="plan-btn" data-plan="B" type="button">Plan B 🐺</button>
+        <button class="plan-btn" data-plan="C" type="button">Plan C 🍽️</button>
+      </div>
+      <p class="plans-sub">(Jy kan altyd change — dis net ‘n idee.)</p>
+    </div>
+
     <div class="helper-text" aria-live="polite"></div>
   </main>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 class="modal-title" id="modalTitle">Plan</h3>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-actions">
+        <button class="modal-close" id="modalClose" type="button">Okay 🖤</button>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
